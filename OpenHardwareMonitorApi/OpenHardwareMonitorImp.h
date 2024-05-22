@@ -6,6 +6,14 @@
 #include "UpdateVisitor.h"
 #include <map>
 
+#pragma comment(lib,"pdh.lib")
+#include<Pdh.h>
+#include<PdhMsg.h>
+#include<powerbase.h>
+#pragma comment(lib, "Powrprof.lib")
+#include <sysinfoapi.h>
+#include <vector>
+
 using namespace System;
 using namespace LibreHardwareMonitor::Hardware;
 
@@ -58,6 +66,7 @@ namespace OpenHardwareMonitorApi {
         std::map<std::wstring, float> m_all_cpu_temperature;
         std::map<std::wstring, float> m_all_cpu_clock;
         std::map<std::wstring, float> m_all_hdd_usage;
+        float max_cpu_freq = 0;
     };
 
     //一个单实例类

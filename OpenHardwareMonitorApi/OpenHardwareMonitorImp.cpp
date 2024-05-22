@@ -121,7 +121,7 @@ namespace OpenHardwareMonitorApi
         MonitorGlobal::Instance()->computer->IsMotherboardEnabled = enable;
     }
     bool COpenHardwareMonitor::GetCPUFreq(IHardware^ hardware, float& freq) {
-        for (int i = 0; i < hardware->Sensors->Length; i++)
+        /*for (int i = 0; i < hardware->Sensors->Length; i++)
         {
             if (hardware->Sensors[i]->SensorType == SensorType::Clock)
             {
@@ -133,7 +133,35 @@ namespace OpenHardwareMonitorApi
         float sum{};
         for (auto i : m_all_cpu_clock)
             sum += i.second;
-        freq = sum / m_all_cpu_clock.size() / 1000.0;
+        freq = sum / m_all_cpu_clock.size() / 1000.0;*/
+        HQUERY query;
+        PDH_STATUS status = PdhOpenQuery(NULL, NULL, &query);
+        if (status != ERROR_SUCCESS)
+        {
+            freq = 0.1;
+            return true;
+        }
+        HCOUNTER counter;
+        status = PdhAddCounterA(query, LPCSTR("\\Processor Information(_Total)\\% Processor Performance"), NULL, &counter);
+        if (status != ERROR_SUCCESS)
+        {
+            freq = 0.2;
+            return true;
+        }
+        PdhCollectQueryData(query);
+        Sleep(200);
+        PdhCollectQueryData(query);
+        PDH_FMT_COUNTERVALUE pdhValue;
+        DWORD dwValue;
+
+        status = PdhGetFormattedCounterValue(counter, PDH_FMT_DOUBLE, &dwValue, &pdhValue);
+        if (status != ERROR_SUCCESS)
+        {
+            freq = 0.3;
+            return true;
+        }
+        PdhCloseQuery(query);
+        freq = pdhValue.doubleValue / 100 * max_cpu_freq;
         return true;
     }
     bool COpenHardwareMonitor::GetHardwareTemperature(IHardware^ hardware, float& temperature)
@@ -252,10 +280,28 @@ namespace OpenHardwareMonitorApi
         }
         return false;
     }
+    typedef struct _PROCESSOR_POWER_INFORMATION {
+        ULONG Number;
+        ULONG MaxMhz;
+        ULONG CurrentMhz;
+        ULONG MhzLimit;
+        ULONG MaxIdleState;
+        ULONG CurrentIdleState;
+    } PROCESSOR_POWER_INFORMATION, * PPROCESSOR_POWER_INFORMATION;
+
 
     COpenHardwareMonitor::COpenHardwareMonitor()
     {
         ResetAllValues();
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        auto ppInfo=std::vector<PROCESSOR_POWER_INFORMATION>(si.dwNumberOfProcessors);
+        auto status = CallNtPowerInformation(POWER_INFORMATION_LEVEL::ProcessorInformation,
+            NULL,0, &ppInfo[0], sizeof(PROCESSOR_POWER_INFORMATION) * ppInfo.size());
+        for (size_t i = 0; i < ppInfo.size(); i++)
+        {
+            max_cpu_freq = max(max_cpu_freq, ppInfo[i].MaxMhz / 1000.f);
+        }
     }
 
     COpenHardwareMonitor::~COpenHardwareMonitor()
